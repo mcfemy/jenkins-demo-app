@@ -12,15 +12,15 @@ pipeline {
                 echo 'Tests passed!'
             }
         }
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Building application...'
-                echo 'Build successful!'
+                script {
+                    docker.build("jenkins-demo:${env.BUILD_NUMBER}")
+                }
             }
         }
         stage('Deploy') {
             steps {
-                echo 'Deploying application...'
                 echo 'Deployment successful!'
             }
         }
