@@ -19,6 +19,14 @@ pipeline {
                 }
             }
         }
+        stage('Run Container') {
+            steps {
+                script {
+                    sh "docker run -d -p 3000:3000 --name jenkins-demo-${env.BUILD_NUMBER} jenkins-demo:${env.BUILD_NUMBER}"
+                    echo "Application running on http://localhost:3000"
+                }
+            }
+        }
         stage('Deploy') {
             steps {
                 echo 'Deployment successful!'
