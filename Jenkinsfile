@@ -19,6 +19,15 @@ pipeline {
                 }
             }
         }
+        stage('Cleanup Old Containers') {
+            steps {
+                script {
+                    sh '''
+                        docker ps -aq --filter "name=jenkins-demo" | xargs -r docker rm -f || true
+                    '''
+                }
+            }
+        }
         stage('Run Container') {
             steps {
                 script {
