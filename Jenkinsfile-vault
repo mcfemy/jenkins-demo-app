@@ -16,6 +16,11 @@ pipeline {
             steps {
                 script {
                     withVault([
+                        configuration: [
+                            vaultUrl: 'http://host.docker.internal:8200',
+                            vaultCredentialId: 'vault-token',
+                            engineVersion: 2
+                        ],
                         vaultSecrets: [
                             [
                                 path: 'secret/jenkins/github',
