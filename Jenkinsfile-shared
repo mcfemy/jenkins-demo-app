@@ -1,0 +1,6 @@
+@Library('shared-library') _
+
+standardPipeline(
+    imageName: 'jenkins-demo',
+    port: 3000
+)
