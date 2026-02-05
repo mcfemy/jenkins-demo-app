@@ -1,0 +1,135 @@
+pipeline {
+    agent any
+    
+    environment {
+        VAULT_ADDR = 'http://host.docker.internal:8200'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Code checked out from GitHub'
+            }
+        }
+        
+        stage('Test with Vault Secrets') {
+            steps {
+                script {
+                    // Get secrets from Vault
+                    withVault([
+                        vaultSecrets: [
+                            [
+                                path: 'secret/jenkins/github',
+                                secretValues: [
+                                    [envVar: 'GITHUB_TOKEN', vaultKey: 'token']
+                                ]
+                            ],
+                            [
+                                path: 'secret/jenkins/docker',
+                                secretValues: [
+                                    [envVar: 'DOCKER_USER', vaultKey: 'username'],
+                                    [envVar: 'DOCKER_PASS', vaultKey: 'password']
+                                ]
+                            ],
+                            [
+                                path: 'secret/jenkins/database',
+                                secretValues: [
+                                    [envVar: 'DB_HOST', vaultKey: 'host'],
+                                    [envVar: 'DB_USER', vaultKey: 'username'],
+                                    [envVar: 'DB_PASS', vaultKey: 'password']
+                                ]
+                            ]
+                        ]
+                    ]) {
+                        echo "✅ Successfully retrieved secrets from Vault!"
+                        echo "GitHub Token: ${GITHUB_TOKEN.take(10)}..." // Show first 10 chars only
+                        echo "Docker User: ${DOCKER_USER}"
+                        echo "Database Host: ${DB_HOST}"
+                        echo "Database User: ${DB_USER}"
+                        // Never echo passwords in real scenarios!
+                    }
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("jenkins-demo:${env.BUILD_NUMBER}")
+                }
+            }
+        }
+        
+        stage('Cleanup Old Containers') {
+            steps {
+                script {
+                    sh '''
+                        docker ps -aq --filter "name=jenkins-demo" | xargs -r docker rm -f || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Run Container') {
+            steps {
+                script {
+                    sh "docker run -d -p 3000:3000 --name jenkins-demo-${env.BUILD_NUMBER} jenkins-demo:${env.BUILD_NUMBER}"
+                    echo "Application running on http://localhost:3000"
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo '🔐 Deployment successful with Vault-managed secrets!'
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Pipeline completed successfully with Vault integration!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+    }
+}
+```
+
+4. **Commit** the file
+
+---
+
+## **Step 6: Create New Jenkins Pipeline Using Vault**
+
+### **In Jenkins, do this:**
+
+1. **Dashboard** → **New Item**
+2. **Name:** `github-demo-vault-pipeline`
+3. Select **Pipeline**
+4. Click **OK**
+5. Scroll to **Pipeline** section
+6. **Definition:** Pipeline script from SCM
+7. **SCM:** Git
+8. **Repository URL:** `https://github.com/mcfemy/jenkins-demo-app`
+9. **Branch:** `*/main`
+10. **Script Path:** `Jenkinsfile-vault`
+11. Click **Save**
+
+---
+
+## **Step 7: Run the Pipeline!**
+
+1. Click **Build Now**
+2. Click on the build number (e.g., #1)
+3. Click **Console Output**
+
+---
+
+**You should see:**
+```
+✅ Successfully retrieved secrets from Vault!
+GitHub Token: ghp_test_t...
+Docker User: your_dockerhub_username
+Database Host: db.example.com
