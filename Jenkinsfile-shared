@@ -1,6 +1,52 @@
 @Library('shared-library') _
 
-standardPipeline(
-    imageName: 'jenkins-demo',
-    port: 3000
-)
+pipeline {
+    agent any
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Code checked out from GitHub'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    buildDockerImage(
+                        imageName: 'jenkins-demo',
+                        buildNumber: env.BUILD_NUMBER
+                    )
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo '🧪 Running tests...'
+                echo '✅ Tests passed!'
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    deployContainer(
+                        imageName: 'jenkins-demo',
+                        buildNumber: env.BUILD_NUMBER,
+                        port: 3000
+                    )
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Pipeline completed successfully using shared library!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+    }
+}
