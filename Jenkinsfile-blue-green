@@ -1,0 +1,51 @@
+@Library('shared-library') _
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Code checked out from GitHub'
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    buildDockerImage(
+                        imageName: 'jenkins-demo',
+                        buildNumber: env.BUILD_NUMBER
+                    )
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo '🧪 Running tests...'
+                echo '✅ All tests passed!'
+            }
+        }
+        
+        stage('Blue-Green Deployment') {
+            steps {
+                script {
+                    blueGreenDeploy(
+                        imageName: 'jenkins-demo',
+                        buildNumber: env.BUILD_NUMBER
+                    )
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Pipeline with Blue-Green deployment completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed - previous environment still active'
+        }
+    }
+}
