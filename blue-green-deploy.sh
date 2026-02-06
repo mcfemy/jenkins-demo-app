@@ -8,18 +8,22 @@ PORT=3000
 if docker ps --format '{{.Names}}' | grep -q "${IMAGE_NAME}-blue"; then
     CURRENT="blue"
     TARGET="green"
+    TARGET_PORT=3001
 elif docker ps --format '{{.Names}}' | grep -q "${IMAGE_NAME}-green"; then
     CURRENT="green"
     TARGET="blue"
+    TARGET_PORT=3000
 else
     # First deployment
     CURRENT="none"
     TARGET="blue"
+    TARGET_PORT=3000
 fi
 
 echo "========================================="
 echo "Current environment: $CURRENT"
 echo "Deploying to: $TARGET"
+echo "Target port: $TARGET_PORT"
 echo "========================================="
 
 # Stop and remove target if exists
@@ -29,22 +33,36 @@ docker rm ${IMAGE_NAME}-${TARGET} 2>/dev/null || true
 # Deploy to target environment
 echo "Deploying ${IMAGE_NAME}:${BUILD_NUMBER} to ${TARGET} environment..."
 docker run -d --name ${IMAGE_NAME}-${TARGET} \
-    -p $((PORT + (TARGET == "green" ? 1 : 0))):${PORT} \
+    -p ${TARGET_PORT}:${PORT} \
     ${IMAGE_NAME}:${BUILD_NUMBER}
 
 # Wait for container to be healthy
 echo "Waiting for container to be ready..."
-sleep 5
+sleep 10
 
-# Run smoke tests
+# Run smoke tests (check if container is running and port is accessible)
 echo "Running smoke tests..."
-if docker exec ${IMAGE_NAME}-${TARGET} curl -f http://localhost:${PORT} > /dev/null 2>&1; then
-    echo "✅ Smoke tests passed!"
+if docker ps | grep -q ${IMAGE_NAME}-${TARGET}; then
+    # Test from host machine instead of inside container
+    if curl -f http://localhost:${TARGET_PORT} > /dev/null 2>&1; then
+        echo "✅ Smoke tests passed!"
+    else
+        echo "⚠️  Container running but not responding yet, giving it more time..."
+        sleep 5
+        if curl -f http://localhost:${TARGET_PORT} > /dev/null 2>&1; then
+            echo "✅ Smoke tests passed!"
+        else
+            echo "❌ Smoke tests failed after retry - rolling back"
+            docker stop ${IMAGE_NAME}-${TARGET}
+            docker rm ${IMAGE_NAME}-${TARGET}
+            echo "Rollback complete. ${CURRENT} environment still active."
+            exit 1
+        fi
+    fi
     
-    # Switch traffic (in real production, you'd update load balancer here)
+    # Switch traffic (stop old environment)
     echo "Switching traffic to ${TARGET} environment..."
     
-    # Stop old environment
     if [ "$CURRENT" != "none" ]; then
         echo "Stopping old ${CURRENT} environment..."
         docker stop ${IMAGE_NAME}-${CURRENT}
@@ -54,12 +72,13 @@ if docker exec ${IMAGE_NAME}-${TARGET} curl -f http://localhost:${PORT} > /dev/n
     echo "========================================="
     echo "✅ Blue-Green deployment successful!"
     echo "Active environment: $TARGET"
+    echo "Application accessible at: http://localhost:${TARGET_PORT}"
     echo "========================================="
     exit 0
 else
-    echo "❌ Smoke tests failed - rolling back"
-    docker stop ${IMAGE_NAME}-${TARGET}
-    docker rm ${IMAGE_NAME}-${TARGET}
+    echo "❌ Container failed to start - rolling back"
+    docker stop ${IMAGE_NAME}-${TARGET} 2>/dev/null
+    docker rm ${IMAGE_NAME}-${TARGET} 2>/dev/null
     echo "Rollback complete. ${CURRENT} environment still active."
     exit 1
 fi
